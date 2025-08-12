@@ -1,0 +1,20 @@
+include README.md
+include LICENSE
+include requirements.txt
+include .env.example
+include Makefile
+include flow.md
+
+recursive-include src *.py
+recursive-include src/templates *.html
+recursive-include src/prompts *.md
+recursive-include tests *.py
+recursive-include API *.py
+recursive-include runnables *.py
+
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]
+recursive-exclude * .DS_Store
+recursive-exclude * *.log
+recursive-exclude data/outbox *
+recursive-exclude static/images generated_*
