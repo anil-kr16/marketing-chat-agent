@@ -1,0 +1,14 @@
+{
+  "dockerfile_lines": [],
+  "graphs": {
+    "langgraph-chat-agent": "src.graph:graph"
+  },
+  "env": "./.env",
+  "python_version": "3.11",
+  "dependencies": [
+    "langgraph",
+    "langchain",
+    "openai",
+    "python-dotenv"
+  ]
+}

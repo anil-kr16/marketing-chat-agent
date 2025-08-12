@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{campaign_title}}</title>
+    <style type="text/css">
+        /* Email-safe CSS styles */
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+            font-family: Arial, sans-serif;
+            -webkit-text-size-adjust: 100%;
+            -ms-text-size-adjust: 100%;
+        }
+        
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .header {
+            background-color: #007bff;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        
+        .hero-section {
+            padding: 0;
+            text-align: center;
+        }
+        
+        .hero-image {
+            width: 100%;
+            max-width: 600px;
+            height: auto;
+            display: block;
+            border: none;
+        }
+        
+        .content-section {
+            padding: 30px 25px;
+        }
+        
+        .greeting {
+            font-size: 18px;
+            color: #333333;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        
+        .marketing-copy {
+            font-size: 16px;
+            line-height: 1.6;
+            color: #555555;
+            margin-bottom: 30px;
+        }
+        
+        .cta-section {
+            text-align: center;
+            margin: 30px 0;
+        }
+        
+        .cta-button {
+            display: inline-block;
+            padding: 15px 30px;
+            margin: 10px 5px;
+            background-color: #28a745;
+            color: white !important;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 16px;
+            border: none;
+            transition: background-color 0.3s;
+        }
+        
+        .cta-button:hover {
+            background-color: #218838;
+        }
+        
+        .cta-button.primary {
+            background-color: #007bff;
+        }
+        
+        .cta-button.primary:hover {
+            background-color: #0056b3;
+        }
+        
+        .hashtags-section {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        .hashtag {
+            display: inline-block;
+            background-color: #e9ecef;
+            color: #495057;
+            padding: 5px 10px;
+            margin: 3px;
+            border-radius: 15px;
+            font-size: 14px;
+            text-decoration: none;
+        }
+        
+        .footer {
+            background-color: #6c757d;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            font-size: 12px;
+        }
+        
+        .footer a {
+            color: #ffffff;
+            text-decoration: underline;
+        }
+        
+        /* Mobile responsive */
+        @media screen and (max-width: 600px) {
+            .email-container {
+                width: 100% !important;
+                border-radius: 0;
+            }
+            
+            .content-section {
+                padding: 20px 15px !important;
+            }
+            
+            .cta-button {
+                display: block !important;
+                margin: 10px 0 !important;
+                width: auto !important;
+            }
+            
+            .header h1 {
+                font-size: 20px !important;
+            }
+            
+            .greeting {
+                font-size: 16px !important;
+            }
+            
+            .marketing-copy {
+                font-size: 14px !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🚀 {{campaign_title}}</h1>
+        </div>
+        
+        <!-- Hero Section with Image -->
+        {% if hero_image %}
+        <div class="hero-section">
+            <img src="{{hero_image}}" alt="{{campaign_title}}" class="hero-image" />
+        </div>
+        {% endif %}
+        
+        <!-- Content Section -->
+        <div class="content-section">
+            <!-- Greeting -->
+            {% if audience_greeting %}
+            <div class="greeting">
+                {{audience_greeting}}
+            </div>
+            {% endif %}
+            
+            <!-- Marketing Copy -->
+            <div class="marketing-copy">
+                {{marketing_copy|safe}}
+            </div>
+            
+            <!-- Call-to-Action Buttons -->
+            {% if cta_buttons %}
+            <div class="cta-section">
+                {% for cta in cta_buttons %}
+                <a href="#" class="cta-button {% if loop.index == 1 %}primary{% endif %}">
+                    {{cta}}
+                </a>
+                {% endfor %}
+            </div>
+            {% endif %}
+            
+            <!-- Hashtags -->
+            {% if hashtags %}
+            <div class="hashtags-section">
+                {% for hashtag in hashtags %}
+                <span class="hashtag">{{hashtag}}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Footer -->
+        <div class="footer">
+            <p>
+                Marketing Campaign | 
+                <a href="#unsubscribe">Unsubscribe</a> | 
+                <a href="#contact">Contact Us</a>
+            </p>
+            <p style="margin: 5px 0 0 0; color: #adb5bd;">
+                This email was generated by AI Marketing Assistant
+            </p>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,74 @@
+{
+  "goal": "Launch our new fitness tracker",
+  "audience": "Health-conscious professionals aged 25-40",
+  "channels": ["Email", "Instagram", "LinkedIn"],
+  "tone": "motivational, sleek",
+  "budget": "$1000"
+}
+
+{
+  "goal": "Promote end-of-season sale on summer wear",
+  "audience": "Fashion-forward Gen Z and millennials",
+  "channels": ["Instagram", "WhatsApp", "Snapchat"],
+  "tone": "fun, bold",
+  "budget": "$700"
+}
+
+{
+  "goal": "Increase footfall for our weekend brunch menu",
+  "audience": "Young couples and foodies in Bangalore",
+  "channels": ["WhatsApp", "Instagram", "Facebook"],
+  "tone": "casual, tempting",
+  "budget": "$200"
+}
+
+
+{
+  "goal": "Drive registrations for our upcoming AI webinar",
+  "audience": "Tech professionals and startup founders",
+  "channels": ["LinkedIn", "Email", "Twitter"],
+  "tone": "professional, informative",
+  "budget": "$300"
+}
+
+{
+  "goal": "Boost sales during Diwali with 20% sitewide discount",
+  "audience": "Online shoppers across India",
+  "channels": ["Email", "Instagram", "WhatsApp"],
+  "tone": "celebratory, warm",
+  "budget": "$500"
+}
+
+// =================================================================
+// NATURAL LANGUAGE EXAMPLES (Chat Agent Input)
+// =================================================================
+// Use these examples when testing the chat agent:
+
+promote smartphones on new year
+promote fitness app on diwali for teenagers  
+sell smart watches on christmas to adults on instagram facebook email
+market headphones to college students on instagram
+promote skincare products on valentine's day to young women
+launch gaming laptop on black friday for gamers on facebook twitter
+sell coffee subscriptions to working professionals on email linkedin
+promote yoga classes on new year to health enthusiasts
+market children's toys on christmas for parents on facebook instagram
+sell travel packages on summer vacation to families
+
+// Multi-channel examples:
+promote fitness tracker on instagram facebook email for health enthusiasts
+sell smart home devices to tech professionals on linkedin email with $800 budget
+market organic food products to health-conscious families on instagram facebook
+promote online courses to students on youtube instagram with engaging tone
+
+// Seasonal & Cultural examples:
+promote traditional jewelry on diwali to indian families
+sell fitness memberships on new year resolution time
+market gift cards on valentine's day to couples
+promote outdoor gear on summer vacation to adventure lovers
+sell winter clothing on christmas season to families
+
+// B2B examples:
+promote business software to startups on linkedin email
+market consulting services to enterprises with professional tone
+sell cloud storage to small businesses on linkedin with $1200 budget
