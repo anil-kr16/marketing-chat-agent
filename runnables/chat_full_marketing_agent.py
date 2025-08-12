@@ -9,6 +9,7 @@ Usage:
 
 import sys
 import os
+from typing import Dict
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from langchain.schema import HumanMessage
@@ -22,6 +23,12 @@ from src.utils.state import MessagesState
 from src.utils.common import is_marketing_request, chat_response
 from src.nodes.llm_node import llm_node
 from src.config import get_config
+
+# === NEW STATEFUL CONSULTATION IMPORTS ===
+from src.services.consultation_manager import get_consultation_manager
+from src.utils.state_converter import consultant_to_campaign_state, preserve_consultation_context
+from src.graphs.consultant.stateful_marketing_graph import create_stateful_marketing_graph
+from src.utils.marketing_state import MarketingConsultantState, ConsultationStage
 
 
 def print_monitoring_summary(result: MessagesState):
@@ -348,13 +355,20 @@ What would you like to promote today?"""
 
 
 def main():
-    """Run the interactive Full Marketing Agent chat."""
+    """Run the interactive Full Marketing Agent with stateful consultation."""
     print_banner("🚀 Full Marketing Campaign Agent")
     print_colored("Type Ctrl+C to exit", "33")
+    print_colored("🧠 Now with intelligent consultation flow!", "36")
+    print_colored("💡 Try: 'promote [product]' to start a consultation", "33")
     print()
     
-    # Initialize agent
+    # Initialize consultation manager and agents
+    consultation_manager = get_consultation_manager()
+    stateful_graph = create_stateful_marketing_graph().compile()
     agent = FullMarketingAgent()
+    
+    # Track active consultation sessions per user (simplified for demo)
+    active_consultations: Dict[str, str] = {}  # user_id -> session_id
     
     try:
         while True:
@@ -367,60 +381,400 @@ def main():
                 print_colored("👋 Goodbye!", "35")
                 break
             
-            # Check if this is a marketing request
-            if is_marketing_request(user_input):
-                # Initialize fresh state for marketing workflow
-                state: MessagesState = {"messages": [HumanMessage(content=user_input)]}
-                
-                # Parse intent first to show user what we understood
-                from src.nodes.intent.parse_intent_node import parse_intent_node
-                parsed_state = parse_intent_node(state)
-                parsed_intent = parsed_state.get("parsed_intent", {})
-                
-                # Show what we understood before execution
+            # Check if user is in an active consultation session
+            user_id = "demo_user"  # In real app, get from auth
+            session_id = active_consultations.get(user_id)
+            
+            if session_id:
+                # User is in active consultation - treat input as answer to current question
                 print("─" * 64)
-                print_colored("🤖 Assistant: I understand you want to:", "32")
+                print_colored("🧠 Continuing consultation...", "32")
                 print("─" * 64)
-                print_kv("📝 Goal", parsed_intent.get("goal", "Not specified"))
-                print_kv("🎯 Audience", parsed_intent.get("audience", "Not specified"))
-                print_kv("📱 Channels", ", ".join(parsed_intent.get("channels", [])) or "Default channels")
-                print_kv("🎨 Tone", parsed_intent.get("tone", "Not specified"))
-                print_kv("💰 Budget", parsed_intent.get("budget", "Not specified"))
-                print()
-                
-                # Create visual separator for execution
-                print("─" * 64)
-                print_colored("🤖 Assistant: Creating Marketing Campaign...", "32")
-                print("─" * 64)
-                
-                # Show progress indicators
-                print("📋 Step 1/7: Parsing your request...")
-                print("🎨 Step 2/7: Creating creative brief...")
-                print("📝 Step 3/7: Generating marketing copy...")
-                print("🖼️  Step 4/7: Creating visual content (this may take 15-20s)...")
-                print("🏷️  Step 5/7: Generating hashtags & CTAs...")
-                print("🔍 Step 6/7: Reviewing content quality...")
-                print("📦 Step 7/7: Packaging final campaign...")
-                print()
-                print_colored("⏳ Please wait... (Full process takes ~25-30 seconds)", "33")
+                print_colored("💡 Great! Let me process your answer and ask the next question.", "33")
                 print()
                 
                 try:
-                    # Run the full marketing agent with already-parsed state
-                    result = agent.run(parsed_state)
+                    # Get current consultation state
+                    consultation_state = consultation_manager.get_session_state(session_id)
+                    if consultation_state:
+                        # Update with user's answer
+                        if consultation_state.qa_history and not consultation_state.qa_history[-1].get("answer"):
+                            consultation_state.update_last_answer(user_input)
+                            print_colored(f"✅ Answer received: {user_input}", "32")
+                            print()
+                            
+                            # Continue consultation with the answer
+                            consultation_result_dict = stateful_graph.invoke(consultation_state)
+                            consultation_result = MarketingConsultantState(**consultation_result_dict)
+                            
+                            # Update session state
+                            consultation_manager.update_session_state(session_id, consultation_result)
+                            
+                            # Handle consultation result
+                            if consultation_result.stage == ConsultationStage.COMPLETED and consultation_result.has_enough_info:
+                                # Consultation complete - convert to campaign and execute
+                                print_colored("✅ Consultation complete! Creating your campaign...", "32")
+                                print()
+                                
+                                # Show gathered information
+                                print("📋 Consultation Summary:")
+                                print("─" * 40)
+                                for key, value in consultation_result.parsed_intent.items():
+                                    if value:
+                                        formatted_key = key.replace("_", " ").title()
+                                        print_kv(f"📌 {formatted_key}", str(value))
+                                print()
+                                
+                                # Convert consultation state to campaign state
+                                campaign_state = consultant_to_campaign_state(consultation_result)
+                                
+                                # Execute campaign creation
+                                campaign_result = agent.run(campaign_state)
+                                print_campaign_summary(campaign_result)
+                                print()
+                                
+                                # Mark consultation as complete and cleanup
+                                consultation_manager.complete_session(session_id)
+                                if user_id in active_consultations:
+                                    del active_consultations[user_id]
+                                    
+                            elif consultation_result.stage == ConsultationStage.GATHERING:
+                                # Show next question
+                                if consultation_result.qa_history:
+                                    last_qa = consultation_result.qa_history[-1]
+                                    if last_qa.get("question") and not last_qa.get("answer"):
+                                        print_colored("🤖 Assistant:", "32")
+                                        print(last_qa["question"])
+                                        print()
+                                        
+                                        # Show progress based on information completeness, not just question count
+                                        core_fields = ["goal", "audience", "channels", "budget", "tone", "timeline"]
+                                        filled_fields = sum(1 for field in core_fields if consultation_result.parsed_intent.get(field))
+                                        total_fields = len(core_fields)
+                                        progress = min((filled_fields / total_fields) * 100, 100)
+                                        
+                                        # Show progress based on information gathered
+                                        print_colored(f"💡 Progress: {filled_fields}/{total_fields} fields completed ({progress:.0f}%)", "33")
+                                        print()
+                            else:
+                                # Handle other stages
+                                print_colored(f"🤖 Consultation stage: {consultation_result.stage}", "33")
+                                print()
+                                
+                        else:
+                            print_colored("❌ No active question to answer", "31")
+                            print()
+                            
+                    else:
+                        print_colored("❌ Consultation session expired", "31")
+                        if user_id in active_consultations:
+                            del active_consultations[user_id]
+                        print()
+                        
+                except Exception as e:
+                    print_colored(f"❌ Consultation error: {str(e)}", "31")
+                    print("Let me try to help you anyway.")
+                    print()
+                    if user_id in active_consultations:
+                        del active_consultations[user_id]
+                        
+            elif is_marketing_request(user_input):
+                # === NEW STATEFUL CONSULTATION FLOW ===
+                print("─" * 64)
+                print_colored("🧠 Starting intelligent consultation...", "36")
+                print("─" * 64)
+                print_colored("💡 I'll ask you a few questions to understand your needs better.", "33")
+                print_colored("💡 Just answer naturally - I'll guide you through the process!", "33")
+                print()
+                
+                try:
+                    # Create or continue consultation session
+                    user_id = "demo_user"  # In real app, get from auth
+                    session_id = active_consultations.get(user_id)
                     
-                    # Clear progress and show results
-                    print_colored("✅ CAMPAIGN CREATION COMPLETED!", "32")
+                    if session_id:
+                        # Continue existing consultation
+                        consultation_state = consultation_manager.get_session_state(session_id)
+                        if consultation_state:
+                            # Update with user's latest response
+                            if consultation_state.qa_history and not consultation_state.qa_history[-1].get("answer"):
+                                consultation_state.update_last_answer(user_input)
+                                # After updating answer, we need to process it and continue consultation
+                                user_provided_answer = True
+                            else:
+                                user_provided_answer = False
+                        else:
+                            # Session expired, start new one
+                            consultation_state = MarketingConsultantState(
+                                user_input=user_input,
+                                session_id=""
+                            )
+                            session_id = consultation_manager.create_session(user_input)
+                            active_consultations[user_id] = session_id
+                            consultation_state.session_id = session_id
+                            user_provided_answer = False
+                    else:
+                        # Start new consultation
+                        session_id = consultation_manager.create_session(user_input)
+                        active_consultations[user_id] = session_id
+                        consultation_state = consultation_manager.get_session_state(session_id)
+                        user_provided_answer = False
+                        
+                    # Ensure we have a valid consultation state
+                    if not consultation_state:
+                        consultation_state = MarketingConsultantState(
+                            user_input=user_input,
+                            session_id=session_id
+                        )
+                        user_provided_answer = False
+                    
+                    # Run stateful consultation
+                    try:
+                        consultation_result_dict = stateful_graph.invoke(consultation_state)
+                        # Convert dict back to MarketingConsultantState object
+                        consultation_result = MarketingConsultantState(**consultation_result_dict)
+                    except Exception as consultation_error:
+                        print_colored(f"❌ Consultation flow error: {str(consultation_error)}", "31")
+                        print("Let me help you create a campaign directly instead.")
+                        print()
+                        
+                        # Fallback to direct campaign creation
+                        state: MessagesState = {"messages": [HumanMessage(content=user_input)]}
+                        
+                        from src.nodes.intent.parse_intent_node import parse_intent_node
+                        parsed_state = parse_intent_node(state)
+                        
+                        campaign_result = agent.run(parsed_state)
+                        print_campaign_summary(campaign_result)
+                        print()
+                        continue
+                    
+                    # Update session state
+                    consultation_manager.update_session_state(session_id, consultation_result)
+                    
+                    # Check consultation result
+                    if consultation_result.stage == ConsultationStage.COMPLETED and consultation_result.has_enough_info:
+                        # Consultation complete - convert to campaign and execute
+                        print_colored("✅ Consultation complete! Creating your campaign...", "32")
+                        print()
+                        
+                        # Show gathered information
+                        print("📋 Consultation Summary:")
+                        print("─" * 40)
+                        for key, value in consultation_result.parsed_intent.items():
+                            if value:
+                                formatted_key = key.replace("_", " ").title()
+                                print_kv(f"📌 {formatted_key}", str(value))
+                        print()
+                        
+                        # Convert consultation state to campaign state
+                        campaign_state = consultant_to_campaign_state(consultation_result)
+                        
+                        # Show progress indicators
+                        print("─" * 64)
+                        print_colored("🤖 Assistant: Creating Marketing Campaign...", "32")
+                        print("─" * 64)
+                        print("📋 Step 1/7: Using consultation data...")
+                        print("🎨 Step 2/7: Creating creative brief...")
+                        print("📝 Step 3/7: Generating marketing copy...")
+                        print("🖼️  Step 4/7: Creating visual content (this may take 15-20s)...")
+                        print("🏷️  Step 5/7: Generating hashtags & CTAs...")
+                        print("🔍 Step 6/7: Reviewing content quality...")
+                        print("📦 Step 7/7: Packaging final campaign...")
+                        print()
+                        print_colored("⏳ Please wait... (Full process takes ~25-30 seconds)", "33")
+                        print()
+                        
+                        # Execute campaign creation
+                        campaign_result = agent.run(campaign_state)
+                        
+                        # Preserve consultation context in results
+                        campaign_result = preserve_consultation_context(consultation_result, campaign_result)
+                        
+                        # Show results
+                        print_colored("✅ CAMPAIGN CREATION COMPLETED!", "32")
+                        print()
+                        
+                        # Print results
+                        print_campaign_summary(campaign_result)
+                        print()
+                        
+                        # Mark consultation as complete and cleanup
+                        consultation_manager.complete_session(session_id)
+                        if user_id in active_consultations:
+                            del active_consultations[user_id]
+                            
+                    elif consultation_result.stage == ConsultationStage.GATHERING:
+                        # Consultation needs more info - ask next question
+                        if consultation_result.qa_history:
+                            last_qa = consultation_result.qa_history[-1]
+                            if last_qa.get("question") and not last_qa.get("answer"):
+                                # Waiting for user to answer this question
+                                print_colored("🤖 Assistant:", "32")
+                                print(last_qa["question"])
+                                print()
+                                
+                                # Show progress
+                                progress = min((consultation_result.question_count / consultation_result.max_questions) * 100, 100)
+                                print_colored(f"💡 Progress: {consultation_result.question_count}/{consultation_result.max_questions} questions ({progress:.0f}%)", "33")
+                                print()
+                            elif last_qa.get("answer") and user_provided_answer:
+                                # User just provided an answer, show next question if available
+                                if len(consultation_result.qa_history) > 1:
+                                    next_qa = consultation_result.qa_history[-1]
+                                    if next_qa.get("question") and not next_qa.get("answer"):
+                                        print_colored("🤖 Assistant:", "32")
+                                        print(next_qa["question"])
+                                        print()
+                                        
+                                        # Show updated progress
+                                        progress = min((consultation_result.question_count / consultation_result.max_questions) * 100, 100)
+                                        print_colored(f"💡 Progress: {consultation_result.question_count}/{consultation_result.max_questions} questions ({progress:.0f}%)", "33")
+                                        print()
+                                    else:
+                                        # Processing answer, might be moving to validation
+                                        print_colored("🤖 Assistant:", "32")
+                                        print("Thank you for that information! Let me process what you've shared and determine what else we need.")
+                                        print()
+                                else:
+                                    # First answer provided, show next question
+                                    print_colored("🤖 Assistant:", "32")
+                                    print("Great! Now let me ask you the next question to gather more details.")
+                                    print()
+                        
+                    elif consultation_result.stage == ConsultationStage.FAILED:
+                        # Consultation failed - provide helpful message
+                        print_colored("❌ I had trouble understanding your request.", "31")
+                        print("Let me help you with a marketing campaign. What specifically would you like to promote?")
+                        print()
+                        
+                        # Cleanup failed session
+                        if user_id in active_consultations:
+                            del active_consultations[user_id]
+                    
+                    else:
+                        # Unexpected state - fallback
+                        print_colored("🤔 Let me ask a clarifying question to better help you.", "33")
+                        print("What specifically would you like to promote or market?")
+                        print()
+                    
+                    # Update session state
+                    consultation_manager.update_session_state(session_id, consultation_result)
+                    
+                    # Check consultation result
+                    if consultation_result.stage == ConsultationStage.COMPLETED and consultation_result.has_enough_info:
+                        # Consultation complete - convert to campaign and execute
+                        print_colored("✅ Consultation complete! Creating your campaign...", "32")
+                        print()
+                        
+                        # Show gathered information
+                        print("📋 Consultation Summary:")
+                        print("─" * 40)
+                        for key, value in consultation_result.parsed_intent.items():
+                            if value:
+                                formatted_key = key.replace("_", " ").title()
+                                print_kv(f"📌 {formatted_key}", str(value))
+                        print()
+                        
+                        # Convert consultation state to campaign state
+                        campaign_state = consultant_to_campaign_state(consultation_result)
+                        
+                        # Show progress indicators
+                        print("─" * 64)
+                        print_colored("🤖 Assistant: Creating Marketing Campaign...", "32")
+                        print("─" * 64)
+                        print("📋 Step 1/7: Using consultation data...")
+                        print("🎨 Step 2/7: Creating creative brief...")
+                        print("📝 Step 3/7: Generating marketing copy...")
+                        print("🖼️  Step 4/7: Creating visual content (this may take 15-20s)...")
+                        print("🏷️  Step 5/7: Generating hashtags & CTAs...")
+                        print("🔍 Step 6/7: Reviewing content quality...")
+                        print("📦 Step 7/7: Packaging final campaign...")
+                        print()
+                        print_colored("⏳ Please wait... (Full process takes ~25-30 seconds)", "33")
+                        print()
+                        
+                        # Execute campaign creation
+                        campaign_result = agent.run(campaign_state)
+                        
+                        # Preserve consultation context in results
+                        campaign_result = preserve_consultation_context(consultation_result, campaign_result)
+                        
+                        # Show results
+                        print_colored("✅ CAMPAIGN CREATION COMPLETED!", "32")
+                        print()
+                        
+                        # Print results
+                        print_campaign_summary(campaign_result)
+                        print()
+                        
+                        # Mark consultation as complete and cleanup
+                        consultation_manager.complete_session(session_id)
+                        if user_id in active_consultations:
+                            del active_consultations[user_id]
+                        
+                    elif consultation_result.stage == ConsultationStage.GATHERING:
+                        # Consultation needs more info - ask next question
+                        if consultation_result.qa_history:
+                            last_qa = consultation_result.qa_history[-1]
+                            if last_qa.get("question") and not last_qa.get("answer"):
+                                # Waiting for user to answer this question
+                                print_colored("🤖 Assistant:", "32")
+                                print(last_qa["question"])
+                                print()
+                                
+                                # Show progress
+                                progress = min((consultation_result.question_count / consultation_result.max_questions) * 100, 100)
+                                print_colored(f"💡 Progress: {consultation_result.question_count}/{consultation_result.max_questions} questions ({progress:.0f}%)", "33")
+                                print()
+                            elif last_qa.get("answer") and user_provided_answer:
+                                # User just provided an answer, show next question if available
+                                if len(consultation_result.qa_history) > 1:
+                                    next_qa = consultation_result.qa_history[-1]
+                                    if next_qa.get("question") and not next_qa.get("answer"):
+                                        print_colored("🤖 Assistant:", "32")
+                                        print(next_qa["question"])
+                                        print()
+                                        
+                                        # Show updated progress
+                                        progress = min((consultation_result.question_count / consultation_result.max_questions) * 100, 100)
+                                        print_colored(f"💡 Progress: {consultation_result.question_count}/{consultation_result.max_questions} questions ({progress:.0f}%)", "33")
+                                        print()
+                                    else:
+                                        # Processing answer, might be moving to validation
+                                        print_colored("🤖 Assistant:", "32")
+                                        print("Thank you for that information! Let me process what you've shared and determine what else we need.")
+                                        print()
+                                else:
+                                    # First answer provided, show next question
+                                    print_colored("🤖 Assistant:", "32")
+                                    print("Great! Now let me ask you the next question to gather more details.")
+                                    print()
+                        
+                    elif consultation_result.stage == ConsultationStage.FAILED:
+                        # Consultation failed - provide helpful message
+                        print_colored("❌ I had trouble understanding your request.", "31")
+                        print("Let me help you with a marketing campaign. What specifically would you like to promote?")
+                        print()
+                        
+                        # Cleanup failed session
+                        if user_id in active_consultations:
+                            del active_consultations[user_id]
+                    
+                    else:
+                        # Unexpected state - fallback
+                        print_colored("🤔 Let me ask a clarifying question to better help you.", "33")
+                        print("What specifically would you like to promote or market?")
+                        print()
+                        
+                except Exception as e:
+                    print_colored(f"❌ Consultation error: {str(e)}", "31")
+                    print("Let me try to help you anyway. What would you like to promote?")
                     print()
                     
-                    # Print comprehensive summary
-                    print_campaign_summary(result)
-                    print()  # Add spacing after campaign summary
-                    
-                except Exception as e:
-                    print_colored(f"❌ Campaign creation failed: {str(e)}", "31")
-                    print("Please try again with a different request.")
-                    print()  # Add spacing after error
+                    # Cleanup on error
+                    if user_id in active_consultations:
+                        del active_consultations[user_id]
             else:
                 # Handle as conversational chat
                 cfg = get_config()
